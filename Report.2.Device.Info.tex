@@ -1,0 +1,126 @@
+\documentclass{article}
+
+\usepackage[english]{babel}
+\usepackage[letterpaper, top=2cm, bottom=2cm, left=3cm, right=3cm, marginparwidth=1.75cm]{geometry}
+
+\usepackage{listings}
+\lstset{language=Python, basicstyle=\ttfamily\small, frame=single, breaklines=true}
+
+\title{Labwork 2}
+\author{Luc Lacotte}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+I am going to play the honest card for this one, I tried looking at the documentation, searching through the source code but I couldn't find anything so some generative AI was used to understand the lab work.
+
+\section{The work}
+
+\subsection{Displaying the graphic card name}
+
+First, I tried doing the commands that were listed in the presentation:
+
+\begin{lstlisting}
+print(cuda.detect())
+cuda.select_device(0)
+\end{lstlisting}
+
+Which displays this:
+
+\begin{lstlisting}
+Found 1 CUDA devices
+id 0    b'NVIDIA GeForce RTX 3050 Ti Laptop GPU'    [SUPPORTED]
+              Compute Capability: 8.6
+                   PCI Device ID: 0
+                      PCI Bus ID: 1
+                        UUID: GPU-6a500019-eb0d-e178-1564-6aee5631d88d
+                        Watchdog: Enabled
+             FP32/FP64 Performance Ratio: 64
+Summary:
+    1/1 devices are supported
+True
+\end{lstlisting}
+
+I am working on my laptop as I have an RTX GPU.
+
+Then I tried looking at the available methods in CUDA. Where I found:
+
+\begin{lstlisting}
+get_current_device
+\end{lstlisting}
+
+Which gives an object with some attributes from the graphics card and eventually I found how to get only the name with:
+
+\begin{lstlisting}
+get_current_device().name
+\end{lstlisting}
+
+\subsection{Finding core info}
+
+This is where I started using generative AI because I could not find what I was looking for in the documentation nor the source code.
+
+First, finding the number of multiprocessors was easy, with:
+
+\begin{lstlisting}
+device = cuda.get_current_device()
+multiprocessor_count = device.MULTIPROCESSOR_COUNT
+print(f"Multiprocessor count: {multiprocessor_count}")
+>>> Multiprocessor count: 20
+\end{lstlisting}
+
+Then I had trouble understanding how I was supposed to get the number of cores because there was not such a thing as \texttt{MULTIPROCESSOR\_COUNT}.
+
+Then I understood that each multiprocessor contained an amount of cores depending on the ``Compute Capability''. This compute capability was given in the \texttt{cuda.detect()} function, 8.6 in my case. With that I have 128 cores per multiprocessor. Thus I needed to multiply both to get the number of cores of my graphics card.
+
+\begin{lstlisting}
+device = cuda.get_current_device()
+core_count = device.MULTIPROCESSOR_COUNT * 128
+print(f"Core count: {core_count}")
+>>> Core count: 2560
+\end{lstlisting}
+
+\subsection{Finding memory size}
+
+For the memory size, like before I could not find the method I was looking for.
+
+But eventually, there is \texttt{cuda.current\_context().get\_memory\_info()} which gives the current context for memory.
+
+I was then able to get the total amount of memory of my graphics card:
+
+\begin{lstlisting}
+_, total = cuda.current_context().get_memory_info()
+print(f"Total memory: {total // (1024 ** 2)} MB")
+>>> Total memory: 3770 MB
+\end{lstlisting}
+
+\section{Full code}
+\begin{lstlisting}
+from numba import cuda
+
+print(cuda.detect())
+
+cuda.select_device(0)
+
+device = cuda.get_current_device()
+
+# print name
+print(device.name)
+
+# multiprocessor count
+multiprocessor_count = device.MULTIPROCESSOR_COUNT
+print(f"Multiprocessor count: {multiprocessor_count}")
+
+# core count
+core_count = device.MULTIPROCESSOR_COUNT * 128 # Compute capability 8.6 => 128 cores per multiprocessor
+print(f"Core count: {core_count}")
+
+# memory size
+_, total = cuda.current_context().get_memory_info()
+print(f"Total memory: {total // (1024 ** 2)} MB")
+\end{lstlisting}
+
+
+\end{document}
