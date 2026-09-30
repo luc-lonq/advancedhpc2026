@@ -1,0 +1,73 @@
+% you don't need a template
+% use the following one
+
+\documentclass{report}
+
+\usepackage[english]{babel}
+\usepackage[a4paper, top=2cm, bottom=2cm, left=3cm, right=3cm]{geometry}
+\usepackage{graphicx}
+\graphicspath{{img/}}
+\usepackage{float}
+
+\usepackage{listings}
+\lstset{language=Python, basicstyle=\ttfamily\small, frame=single, breaklines=true}
+
+\newcommand{\image}[1]{
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\textwidth]{#1}
+    \end{figure}
+}
+
+\title{A Labwork 4 Report}
+\author{Luc Lacotte}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+This labwork is about implementing the previous labwork but using 2D blocks and grids instead of 1D and experimenting with different values.
+\section{Use 2 blocks and grids}
+To use 2D blocks and grids, I first changed the kernel function to use 2D blocks and grids.
+To do that, I added the Thread ID y (tidy)
+
+tidx = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+tidy = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
+
+Then I because there is a new dimension, I added the tidy in the calculation for source and destination arrays.
+
+g = np.uint8((src[tidx, tidy, 0] + src[tidx, tidy, 1] + src[tidx, tidy, 2]) / 3)
+dst[tidx, tidy, 0] = dst[tidx, tidy, 1] = dst[tidx, tidy, 2] = g
+
+\section{Experimenting with different values}
+
+I modified the script to use every possible block size from 1 to 32 and to run the kernel 10 times for each block size.
+
+These are the results I got (I removed the block size 1 because it was too slow and messed up the scale of the graph):
+
+\image{gpu_grayscale_execution_time_block_size.png}
+
+We can see that the lower the block size, the slower the execution time is.
+It stabilizes with a grid size of 5 to 27, with 8 and 16 being slightly faster than the others.
+But for 28 to 32, the execution time increases again.
+This seems weird to me because that would mean that at 784 threads per block (28x28), there is some cores that are not being utilized efficiently, but my gpu (RTX 3050Ti Laptop) should be able to handle 1024 threads per block (32x32).
+
+\section{Comparison of 1D and 2D blocks and grids}
+
+\image{gpu_grayscale_execution_time_comparison_1d_2d.png}
+
+We can see that the 1D implementation is faster than the 2D implementation.
+I think it's because the 2D implementation has more calculations to do for each pixel (x and y now), so it takes more time to execute.
+
+\section{Questions}
+
+Later
+
+\end{document}
+
+
+
+
+
+
