@@ -39,7 +39,7 @@ tidx = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 tidy = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
 \end{lstlisting}
 
-Then, because there is a new dimension, I added \texttt{tidy} to the indexing of the source and destination arrays. The image no longer needs to be flattened: it is passed with its original shape \texttt{(height, width, 3)}.
+Then, because there is a new dimension, I added \texttt{tidy} to the indexing of the source and destination arrays. The image no longer needs to be flattened, it is passed with its original shape \texttt{(height, width, 3)}.
 
 \begin{lstlisting}
 @cuda.jit
@@ -94,7 +94,8 @@ To compare both approaches, I ran each kernel 10 times: the 1D version with a bl
 \image{gpu_grayscale_execution_time_comparison_1d_2d.png}{Average execution time of the 1D and 2D grayscale kernels (10 runs).}
 
 We can see that the 1D implementation is faster than the 2D implementation.
-I think it is because the 2D implementation has more calculations to do for each pixel (both $x$ and $y$ indices now), so it takes more time to execute.
+
+Seems odd to me. But I don't know what is wrong.
 
 \section{Questions}
 
