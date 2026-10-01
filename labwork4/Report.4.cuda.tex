@@ -12,62 +12,105 @@
 \usepackage{listings}
 \lstset{language=Python, basicstyle=\ttfamily\small, frame=single, breaklines=true}
 
-\newcommand{\image}[1]{
+\newcommand{\image}[2]{
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.8\textwidth]{#1}
+        \includegraphics[width=0.85\textwidth]{#1}
+        \caption{#2}
     \end{figure}
 }
 
 \title{A Labwork 4 Report}
 \author{Luc Lacotte}
+\date{}
 
 \begin{document}
 
 \maketitle
 
 \section{Introduction}
-This labwork is about implementing the previous labwork but using 2D blocks and grids instead of 1D and experimenting with different values.
-\section{Use 2 blocks and grids}
-To use 2D blocks and grids, I first changed the kernel function to use 2D blocks and grids.
-To do that, I added the Thread ID y (tidy)
+This labwork is about re-implementing the grayscale filter of the previous labwork using \textbf{2D blocks and grids} instead of 1D ones, and experimenting with different block sizes.
 
+\section{Using 2D blocks and grids}
+To use 2D blocks and grids, I first changed the kernel function. I added a second thread index, \texttt{tidy}, computed along the $y$ axis in the same way as \texttt{tidx}:
+
+\begin{lstlisting}
 tidx = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 tidy = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
+\end{lstlisting}
 
-Then I because there is a new dimension, I added the tidy in the calculation for source and destination arrays.
+Then, because there is a new dimension, I added \texttt{tidy} to the indexing of the source and destination arrays. The image no longer needs to be flattened: it is passed with its original shape \texttt{(height, width, 3)}.
 
-g = np.uint8((src[tidx, tidy, 0] + src[tidx, tidy, 1] + src[tidx, tidy, 2]) / 3)
-dst[tidx, tidy, 0] = dst[tidx, tidy, 1] = dst[tidx, tidy, 2] = g
+\begin{lstlisting}
+@cuda.jit
+def grayscaleGPU2D(src, dst):
+    tidx = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+    tidy = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
+    g = np.uint8((src[tidx, tidy, 0] + src[tidx, tidy, 1] + src[tidx, tidy, 2]) / 3)
+    dst[tidx, tidy, 0] = dst[tidx, tidy, 1] = dst[tidx, tidy, 2] = g
+\end{lstlisting}
 
-\section{Experimenting with different values}
+The block size and grid size also become 2D tuples:
 
-I modified the script to use every possible block size from 1 to 32 and to run the kernel 10 times for each block size.
+\begin{lstlisting}
+blockSize = (32, 32)
+gridSize = (math.ceil(img.shape[0] / 32), math.ceil(img.shape[1] / 32))
+grayscaledGPUimg = grayscaleGPU2D[gridSize, blockSize](devInput, devOutput)
+\end{lstlisting}
 
-These are the results I got (I removed the block size 1 because it was too slow and messed up the scale of the graph):
+\section{Experimenting with different block sizes}
 
-\image{gpu_grayscale_execution_time_block_size.png}
+I modified the script to try every square block size from $2\times2$ to $32\times32$, running the kernel 10 times for each block size and taking the average execution time.
 
-We can see that the lower the block size, the slower the execution time is.
-It stabilizes with a grid size of 5 to 27, with 8 and 16 being slightly faster than the others.
-But for 28 to 32, the execution time increases again.
-This seems weird to me because that would mean that at 784 threads per block (28x28), there is some cores that are not being utilized efficiently, but my gpu (RTX 3050Ti Laptop) should be able to handle 1024 threads per block (32x32).
+\begin{lstlisting}
+for i in range(2, 33):
+    times = []
+    for j in range(10):
+        ...
+        blockSize = (i, i)
+        gridSize = (math.ceil(img.shape[0] / i), math.ceil(img.shape[1] / i))
+        t1 = time.time()
+        grayscaleGPU2D[gridSize, blockSize](devInput, devOutput)
+        cuda.synchronize()
+        t2 = time.time()
+        times.append(t2 - t1)
+    avgTimes.append(np.mean(times))
+\end{lstlisting}
+
+These are the results I got (I removed the block size $1\times1$ because it was too slow and messed up the scale of the graph):
+
+\image{gpu_grayscale_execution_time_block_size.png}{Average execution time of the 2D grayscale kernel depending on the block size (10 runs).}
+
+We can see that the smaller the block size, the slower the execution is.
+It stabilizes for block sizes between $5\times5$ and $27\times27$, with $8\times8$ and $16\times16$ being slightly faster than the others.
+But from $28\times28$ to $32\times32$, the execution time increases again.
+
+This seems weird to me because it would mean that at 784 threads per block ($28\times28$), some cores are not being utilized efficiently, while my GPU (RTX 3050 Ti Laptop) should be able to handle 1024 threads per block ($32\times32$).
 
 \section{Comparison of 1D and 2D blocks and grids}
 
-\image{gpu_grayscale_execution_time_comparison_1d_2d.png}
+To compare both approaches, I ran each kernel 10 times: the 1D version with a block size of 256 and the 2D version with a block size of $16\times16$ (also 256 threads per block).
+
+\image{gpu_grayscale_execution_time_comparison_1d_2d.png}{Average execution time of the 1D and 2D grayscale kernels (10 runs).}
 
 We can see that the 1D implementation is faster than the 2D implementation.
-I think it's because the 2D implementation has more calculations to do for each pixel (x and y now), so it takes more time to execute.
+I think it is because the 2D implementation has more calculations to do for each pixel (both $x$ and $y$ indices now), so it takes more time to execute.
 
 \section{Questions}
 
-Later
+\begin{enumerate}
+    \item It would be $16\times16$, because we only have 512 threads per block, and $32\times32$ would be 1024 threads per block, which is too much for this GPU.
+
+    \item It would be 512 threads per block, because it allows us to use the maximum number of threads: $1536 / 3 = 512$, so this configuration perfectly fills the SM with 3 blocks of 512 threads.
+
+    The other options are not viable:
+    \begin{itemize}
+        \item 128 threads/block with at most 4 blocks would only give 512 threads;
+        \item 256 threads/block would only give 1024 threads;
+        \item 1024 threads/block would only allow a single block of 1024 threads.
+    \end{itemize}
+
+    \item Because we have 512 threads per block, the number of threads in the grid will be a multiple of 512, so in this case $4 \times 512 = 2048$ threads.
+\end{enumerate}
 
 \end{document}
-
-
-
-
-
-
