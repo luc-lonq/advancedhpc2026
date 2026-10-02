@@ -120,10 +120,61 @@ def gaussian_blur_gpu_shared_memory(src, dst, matrix, matrix_sum):
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=8cm]{execution_times.png}
+\includegraphics[width=0.6\textwidth]{execution_times.png}
 \caption{Execution times of the Gaussian blur filter on global memory and shared memory.}
 \end{figure}
 
 We can see that over some iterations, shared memory is a bit faster.
+
+\section{Experimenting with block size}
+
+To experiment with block size, I tried automating it in the script with some loops, but because the shared array size needs to be known at compile time, I created a factory.
+
+\begin{lstlisting}
+def gaussian_blur_gpu_shared_memory_factory(blockSizeX, blockSizeY):
+    @cuda.jit
+    def gaussian_blur_gpu_shared_memory_variable(src, dst, matrix, matrix_sum):
+        tile = cuda.shared.array(shape=(blockSizeY, blockSizeX, 3), dtype=numba.uint8)
+        tx = cuda.threadIdx.x
+        ty = cuda.threadIdx.y
+        bx = cuda.blockIdx.x
+        by = cuda.blockIdx.y
+        bdx = cuda.blockDim.x
+        bdy = cuda.blockDim.y
+        x = bx * bdx + tx
+        y = by * bdy + ty
+        h, w, chan = src.shape
+        if x >= w or y >= h:
+            return
+        for c in range(chan):
+            tile[ty, tx, c] = src[y, x, c]
+        cuda.syncthreads()
+        for c in range(chan):
+            out_of_range_pixel_value = 0
+            pixel_value = 0
+            for ky in range(-3, 4):
+                for kx in range(-3, 4):
+                    ly = ty + ky
+                    lx = tx + kx
+                    if ly < 0 or ly >= bdy or lx < 0 or lx >= bdx or y + ky >= h or x + kx >= w:
+                        out_of_range_pixel_value += matrix[ky + 3, kx + 3]
+                    else:
+                        pixel_value += tile[ly, lx, c] * matrix[ky + 3, kx + 3]
+            dst[y, x, c] = pixel_value // (matrix_sum - out_of_range_pixel_value)
+
+    return gaussian_blur_gpu_shared_memory_variable
+\end{lstlisting}
+
+With this, I have a function that returns the kernel function with the block size I want.
+
+Here are the results:
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\textwidth]{execution_times_block_size.png}
+\caption{Execution times of the Gaussian blur filter on shared memory with different block sizes.}
+\end{figure}
+
+We can see that very small block sizes are very slow, but once we reach a block size of 8x8, the execution time remains approximately the same until the maximum block size of 32x32.
 
 \end{document}

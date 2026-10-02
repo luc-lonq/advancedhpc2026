@@ -17,6 +17,8 @@ GAUSSIAN_BLUR_MATRIX = [
 
 GAUSSIAN_BLUR_MATRIX_SUM = 1003
 
+#cpu version
+
 def gaussian_blur_cpu(image):
     h, w, chan = image.shape
     output_image = np.zeros_like(image)
@@ -49,6 +51,7 @@ print(f"CPU time: {t2 - t1:.2f} seconds")
 plt.imshow(blurred_img)
 plt.imsave("img/img_blurred_cpu.jpg", blurred_img)
 
+# gpu version
 @cuda.jit
 def gaussian_blur_gpu(src, dst, matrix, matrix_sum):
     tidx = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
@@ -86,7 +89,7 @@ plt.imshow(hostOutput)
 plt.imsave("img/img_blurred_gpu.jpg", hostOutput)
 print(f"GPU time: {t2 - t1:.2f} seconds")
 
-
+#shared memory version
 @cuda.jit
 def gaussian_blur_gpu_shared_memory(src, dst, matrix, matrix_sum):
     tile = cuda.shared.array(shape=(32, 32, 3), dtype=numba.uint8)
@@ -134,6 +137,8 @@ plt.imshow(hostOutput)
 plt.imsave("img/img_blurred_gpu.jpg", hostOutput)
 print(f"GPU time: {t2 - t1:.2f} seconds")
 
+
+# comparison shared memory
 times = []
 img = plt.imread("img/img.jpg")
 hostInput = np.zeros(img.shape, np.uint8)
@@ -173,3 +178,70 @@ plt.title('Average Execution Time (10 runs)')
 plt.ylabel('Time (seconds)')
 plt.tight_layout()
 plt.savefig('img/execution_times.png')
+
+
+
+
+def gaussian_blur_gpu_shared_memory_factory(blockSizeX, blockSizeY):
+    @cuda.jit
+    def gaussian_blur_gpu_shared_memory_variable(src, dst, matrix, matrix_sum):
+        tile = cuda.shared.array(shape=(blockSizeY, blockSizeX, 3), dtype=numba.uint8)
+        tx = cuda.threadIdx.x
+        ty = cuda.threadIdx.y
+        bx = cuda.blockIdx.x
+        by = cuda.blockIdx.y
+        bdx = cuda.blockDim.x
+        bdy = cuda.blockDim.y
+        x = bx * bdx + tx
+        y = by * bdy + ty
+        h, w, chan = src.shape
+        if x >= w or y >= h:
+            return
+        for c in range(chan):
+            tile[ty, tx, c] = src[y, x, c]
+        cuda.syncthreads()
+        for c in range(chan):
+            out_of_range_pixel_value = 0
+            pixel_value = 0
+            for ky in range(-3, 4):
+                for kx in range(-3, 4):
+                    ly = ty + ky
+                    lx = tx + kx
+                    if ly < 0 or ly >= bdy or lx < 0 or lx >= bdx or y + ky >= h or x + kx >= w:
+                        out_of_range_pixel_value += matrix[ky + 3, kx + 3]
+                    else:
+                        pixel_value += tile[ly, lx, c] * matrix[ky + 3, kx + 3]
+            dst[y, x, c] = pixel_value // (matrix_sum - out_of_range_pixel_value)
+
+    return gaussian_blur_gpu_shared_memory_variable
+
+devInput = cuda.to_device(img)
+devOutput = cuda.to_device(hostOutput)
+devMatrix = cuda.to_device(np.array(GAUSSIAN_BLUR_MATRIX, dtype=np.int32))
+
+times = []
+for i in range(1,33):
+    times_block_size = []
+    blockSize = (i, i)
+    gridSize = (math.ceil(img.shape[1] / blockSize[0]), math.ceil(img.shape[0] / blockSize[1]))
+    # first to compile
+    kernel = gaussian_blur_gpu_shared_memory_factory(i, i)
+    kernel[gridSize, blockSize](devInput, devOutput, devMatrix, GAUSSIAN_BLUR_MATRIX_SUM)
+    for j in range(10):
+        print(f"block size: {i}, run: {j+1}")
+        t1 = time.time()
+        kernel[gridSize, blockSize](devInput, devOutput, devMatrix, GAUSSIAN_BLUR_MATRIX_SUM)
+        cuda.synchronize()
+        t2 = time.time()
+        hostOutput = devOutput.copy_to_host()
+        times_block_size.append(t2 - t1)
+    times.append(np.mean(times_block_size))
+plt.figure(figsize=(10, 6))
+plt.plot(range(1, 33), times, marker='o')
+plt.title('Average Execution Time vs Block Size (10 runs)')
+plt.xlabel('Block Size (N x N)')
+plt.ylabel('Average Execution Time (seconds)')
+plt.xticks(range(1, 33))
+plt.grid()
+plt.tight_layout()
+plt.savefig('img/execution_times_block_size.png')
