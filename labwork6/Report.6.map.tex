@@ -4,6 +4,8 @@
 \documentclass{report}
 
 \usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
 \graphicspath{{img/}}
 \usepackage[a4paper, top=2cm, bottom=2cm, left=3cm, right=3cm]{geometry}
 
@@ -37,7 +39,7 @@ def image_binarization(src, dst, threshold):
         dst[tidy, tidx] = 0
 \end{lstlisting}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.7\textwidth]{binarized_img.png}
 \caption{Binarized image using a threshold of 128.}
@@ -58,16 +60,20 @@ def brightness_control(src, dst, value):
 
 min(max(...., 0), 255) is used to ensure that the pixel values remain within the valid range of 0 to 255 after adding the brightness value.
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.7\textwidth]{add_100.png}
-\caption{Image with increased brightness.}
-\end{figure}
-
-\begin{figure}[h]
+\begin{subfigure}{0.48\textwidth}
 \centering
-\includegraphics[width=0.7\textwidth]{remove_100.png}
-\caption{Image with decreased brightness.}
+\includegraphics[width=\textwidth]{add_100.png}
+\caption{Brightness $+100$.}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{remove_100.png}
+\caption{Brightness $-100$.}
+\end{subfigure}
+\caption{Brightness control.}
 \end{figure}
 
 \section{Blending}
@@ -82,39 +88,43 @@ def blend_two_images(src1, src2, dst, c):
         dst[tidy, tidx, i] = int(src1[tidy, tidx, i] * c + src2[tidy, tidx, i] * (1 - c))
 \end{lstlisting}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.7\textwidth]{blend_0.5.png}
-\caption{Blended image with a blending factor of 0.5.}
-\end{figure}
-
-\begin{figure}[h]
+\begin{subfigure}{0.32\textwidth}
 \centering
-\includegraphics[width=0.7\textwidth]{blend_0.8.png}
-\caption{Blended image with a blending factor of 0.8.}
-\end{figure}
-
-\begin{figure}[h]
+\includegraphics[width=\textwidth]{blend_0.2.png}
+\caption{$c = 0.2$}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.32\textwidth}
 \centering
-\includegraphics[width=0.7\textwidth]{blend_0.2.png}
-\caption{Blended image with a blending factor of 0.2.}
+\includegraphics[width=\textwidth]{blend_0.5.png}
+\caption{$c = 0.5$}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.32\textwidth}
+\centering
+\includegraphics[width=\textwidth]{blend_0.8.png}
+\caption{$c = 0.8$}
+\end{subfigure}
+\caption{Blended images with different blending factors $c$.}
 \end{figure}
 
 \section{Block size}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.7\textwidth]{labwork6a.png}
 \caption{Execution times of the image binarization function with different block sizes.}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.7\textwidth]{labwork6b.png}
 \caption{Execution times of the image brightness control function with different block sizes.}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.7\textwidth]{labwork6c.png}
 \caption{Execution times of the image blending function with different block sizes.}
